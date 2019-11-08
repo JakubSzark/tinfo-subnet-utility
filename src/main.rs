@@ -128,13 +128,24 @@ fn main()
 
     console::print_divider();
     ip.print("XXX", cidr);
+    print!("Cidr in Binary: ");
+    
+    for _ in 0..bits_in_cidr {
+        print!("1");
+    }
+
+    for _ in 0..(8 - bits_in_cidr) {
+        print!("0");
+    }
+
+    print!("\n");
     println!("Block Size: [{}]", block_size);
     console::print_divider();
-
     println!("");
 
     for i in 0..(256 / block_size)
     {
+        println!("Network #{}", i);
         println!("{}{} <= Net ID", ip, i * block_size);
 
         if block_size > 2 {
