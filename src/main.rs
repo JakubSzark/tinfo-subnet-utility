@@ -1,178 +1,129 @@
-#![allow(dead_code)]
-
-mod console
-{
-    /// Returns user input
-    pub fn get_line() -> String
-    {
-        use std::io::{stdin, stdout, Write};
-    
-        let mut input = String::new();
-        print!("> ");
-        stdout().flush()
-            .expect("Could not flush output!");
-        stdin().read_line(&mut input)
-            .expect("Could not read input!");
-        return input;
-    }
-    
-    /// Prints a divider
-    pub fn print_divider() {
-        println!("=====================");
-    }
-
-    /// Prints a message then returns user input
-    pub fn prompt(message: &str) -> String 
-    {
-        println!("{}", message);
-        return get_line();
-    }
-}
-
-struct IP(u8, u8, u8);
-
+use std::io::{stdin, stdout, Write};
+use std::num::ParseIntError;
 use std::fmt;
 
-impl IP
-{
-    pub fn print(&self, last_octet: &str, cidr: u8) {
-        println!("{}{} /{}", self, last_octet, cidr);
-    }
-}
+// Represents an IP Address
+struct IP(i32, i32, i32);
 
-impl fmt::Display for IP
-{
+// Make IP easy to print
+impl fmt::Display for IP {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.{}.{}.", self.0, self.1, self.2)
+        write!(f, "{}.{}.{}", self.0, self.1, self.2)
     }
 }
 
-fn parse_ip(s: &String) -> Option<IP> 
-{
-    let mut ip = IP(0, 0, 0);
-    let ip_str: Vec<&str> = s.split(".").collect();
-
-    if ip_str.len() >= 3 
-    { 
-        ip.0 = match ip_str[0].parse() { Ok(e) => e, Err(_) => return None };
-        ip.1 = match ip_str[1].parse() { Ok(e) => e, Err(_) => return None };
-        ip.2 = match ip_str[2].trim().parse() { 
-            Ok(e) => e, Err(_) => return None 
-        };
-
-        Some(ip) 
-    } 
-    else { None }
+// Read a line of user input
+fn read_line(string: &mut String) {
+	print!("> ");
+	string.clear();
+	stdout().flush().expect("Could not flush output!");
+	stdin().read_line(string).expect("Could not read line!");
 }
 
-fn main() 
-{
-    // Header
-    console::print_divider();
-    println!("TINFO 250 - Subnet Utility");
-    console::print_divider();
+// Parse a &str Vec into an IP
+fn parse_ip(vec: &Vec<&str>) -> Result<IP, ParseIntError> {
+	let mut result = IP(0, 0, 0);
+	result.0 = vec[0].parse()?;
+	result.2 = vec[2].trim().parse()?;
+	result.1 = vec[1].parse()?;
+	Ok(result)
+}
 
-    let ip: IP;
-    let mut cidr: u8;
+fn main() {
+	// Application Variables
+	let mut input = String::new();
+	let mut user_ip: IP;
+	let mut user_cidr: i32;
 
-    // Parse IP Address
-    loop
-    {
-        let input_ip = console::prompt(
-            "Enter an IP address\n\
-            Example: 192.168.10");
-    
-        match parse_ip(&input_ip)
-        {
-            Some(i) => 
-            { 
-                ip = i;
-                break; 
-            },
-            None => { }
-        }
-    }
+	// Main Application Loop
+	'root: loop {
+		println!("TINFO 250 - Subnetting Utility");
+		println!("==============================");
 
-    // Parse Cidr Value
-    loop
-    {
-        let input_cidr = console::prompt("Enter a \
-            Cidr Value [24-31]:");
-        let cidr_str = input_cidr.trim();
-        
-        match cidr_str.parse()
-        {
-            Ok(i) =>
-            {
-                cidr = i;
-                if i < 24 || i >= 32 {
-                    continue;
-                }
-                break;
-            },
-            Err(_) => { }
-        }  
-    }
+		// Read an IP Address from the user
+		
+		'ip: loop {
+			println!("Enter an IP Address.");
+			println!("Example: [192.168.10]");
 
-    let mut cidr_size: u32 = 0;
-    let bits_in_cidr = cidr - 24;
-    let mut value = 128;
+			read_line(&mut input);
+			let split: Vec<&str> = input.split(".").collect();
+			if split.len() >= 3 {
+				match parse_ip(&split) {
+					Ok(ip) => {
+						user_ip = ip;
+						break 'ip; 
+					}, Err(_) => {}
+				}			
+			}
+		}
 
-    for _ in 0..bits_in_cidr 
-    {
-        cidr_size += value;
-        value /= 2;
-    }
+		// Read a Cidr from the user
 
-    let block_size = 256 - cidr_size;
+		'cidr: loop {
+			println!("Enter a Cidr value.");
+			println!("Range: [24-31]");
 
-    console::print_divider();
-    ip.print("XXX", cidr);
-    print!("Cidr in Binary: ");
-    
-    for _ in 0..bits_in_cidr {
-        print!("1");
-    }
+			read_line(&mut input);
+			match input.trim().parse::<i32>() {
+				Ok(cidr) => {
+					if cidr >= 24 && cidr <= 31 {
+						user_cidr = cidr;
+						break 'cidr;
+					}
+				}, Err(_) => {}
+			}
+		}
 
-    for _ in 0..(8 - bits_in_cidr) {
-        print!("0");
-    }
+		// Calculate Block Size
 
-    print!("\n");
-    println!("Block Size: [{}]", block_size);
-    console::print_divider();
-    println!("");
+		let mut block_size = 0;
+		let bits_in_cidr = user_cidr - 24;
+		let mut addition = 128;
 
-    for i in 0..(256 / block_size)
-    {
-        println!("Network #{}", i);
-        println!("{}{} <= Net ID", ip, i * block_size);
+		for _ in 0..bits_in_cidr {
+			block_size += addition;
+			addition /= 2;
+		}
 
-        if block_size > 2 {
-            println!("{}{} <= Default Gateway", ip, i * block_size + 1);
-        }
+		block_size = 256 - block_size;
 
-        if block_size > 3 {
-            println!("{}{} <= Switch", ip, i * block_size + 2);
-        }
+		// Print General Network Properties
 
-        if block_size > 4
-        {
-            println!("{}{} <= First PC", ip, i * block_size + 3);
-            println!("{}{} <= Last PC", ip, i * block_size + block_size - 2);
-        }
+		println!("\nConfiguring...");
+		println!("{}.{} /{}", user_ip, "XXX", user_cidr);
+		println!("Block Size: {}", block_size);
+		println!("");
 
-        println!("{}{} <= Broadcast", ip, i * block_size + block_size - 1);
-        println!("");
-    }
+		// Print Networks
 
-    console::print_divider();
+		for i in 0..(256 / block_size) {
+			println!("Network #{}", i);
+			println!("{}.{} <= Network ID", user_ip, i * block_size);
+			if block_size > 2 {
+				println!("{}.{} <= Default Gateway", user_ip, i * block_size + 1);
+			}
+			if block_size > 3 {
+				println!("{}.{} <= Switch", user_ip, i * block_size + 2);
+			}
+			if block_size > 4 {
+				println!("{}.{} <= First PC", user_ip, i * block_size + 3);
+				println!("{}.{} <= Last PC", user_ip, i * block_size + block_size - 2);
+			}
+			println!("{}.{} <= Broadcast", user_ip, i * block_size + block_size - 1);
+			println!("");
+		}
 
-    loop
-    {
-        let quit = console::prompt("Type 'Exit' to Exit...");
-        if quit.trim().to_lowercase() == "exit" {
-            break;
-        }
-    }
+		println!("^ {} Networks Created! ^", 256 / block_size);
+		println!("");
+
+		// Ask user if they want to quit the application
+		
+		println!("Would you like to Restart? [Yes / No]");
+		
+		read_line(&mut input);
+		if input.to_lowercase().trim() == "no" {
+			break 'root;
+		}
+	}
 }
